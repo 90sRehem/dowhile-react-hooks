@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useReducer } from "react";
-
+import React, { useEffect, useReducer, useCallback } from "react";
 import { fetchGithubUser } from './userService'
-
 import { UserForm } from "./components/UserForm";
 import { UserFalback } from './components/UserFallback'
 import { UserView } from './components/UserView'
@@ -13,26 +11,26 @@ const REQUEST_STATUS = {
   REJECTED: 'rejected'
 }
 
-const userReducer = (state, action) => {
+const asyncReducer = (state, action) => {
   switch (action.type) {
     case REQUEST_STATUS.PENDING:
       return {
         status: REQUEST_STATUS.PENDING,
-        user: null,
+        data: null,
         error: null
       }
 
     case REQUEST_STATUS.RESOLVED:
       return {
         status: REQUEST_STATUS.RESOLVED,
-        user: action.user,
+        data: action.data,
         error: null
       }
 
     case REQUEST_STATUS.REJECTED:
       return {
         status: REQUEST_STATUS.REJECTED,
-        user: null,
+        data: null,
         error: action.error
       }
 
@@ -41,86 +39,37 @@ const userReducer = (state, action) => {
   }
 }
 
-const UserInfo = ({ userName }) => {
-  // -- PASSO 1 --
-  // const [user, setUser] = useState(null);
-  // const [error, setError] = useState(null);
-  // const [status, setStatus] = useState('idle');
-
-  // -- PASSO 2 --
-  // const [state, setState] = useState({
-  //   status: userName ? 'pendding' : 'idle',
-  //   user: null,
-  //   error: null
-  // });
-
-  const initialValue = {
-    status: userName ? REQUEST_STATUS.PENDING : REQUEST_STATUS.IDLE,
+const useAsync = (initialState) => {
+  const [state, dispatch] = useReducer(asyncReducer, {
+    status: REQUEST_STATUS.IDLE,
     user: null,
-    error: null
-  }
+    error: null,
+    ...initialState,
+  });
+  const run = useCallback((promise) => {
+    dispatch({ type: REQUEST_STATUS.PENDING })
+    promise.then(
+      data => dispatch({ type: REQUEST_STATUS.RESOLVED, data }),
+      error => dispatch({ type: REQUEST_STATUS.REJECTED, error })
+    )
+  }, []);
+  return { ...state, run }
+}
 
-  const [state, dispatch] = useReducer(userReducer, initialValue);
+const UserInfo = ({ userName }) => {
+  const initialRequestStatus = userName
+    ? REQUEST_STATUS.PENDING
+    : REQUEST_STATUS.IDLE
 
-  // -- PASSO 2/3 --
-  const { status, user, error } = state
+  const { status, data: user, error, run } = useAsync({
+    status: initialRequestStatus
+  })
 
   useEffect(() => {
     if (!userName) return
-    // -- PASSO 1 --
-    // setUser(null)
-    // setError(null)
-    // setStatus('pending')
+    return run(fetchGithubUser(userName))
+  }, [userName, run]);
 
-    // -- PASSO 2 --
-    // setState({ status: 'pendding' })
-
-    // -- PASSO 3 --
-    dispatch({ type: REQUEST_STATUS.PENDING })
-
-    fetchGithubUser(userName).then(
-      (userData) => {
-        // -- PASSO 1 --
-        // setUser(userData)
-        // setStatus('resolved')
-
-        // -- PASSO 2 --
-        // setState({ status: 'resolved', user: userData })
-
-        // -- PASSO 3 --
-        dispatch({ type: REQUEST_STATUS.RESOLVED, user: userData })
-      },
-      (error) => {
-        // -- PASSO 1 --
-        // setError(error)
-        // setStatus('rejected')
-
-        // -- PASSO 2 --
-        // setState({ status: 'rejected', error })
-
-        // -- PASSO 3 --
-        dispatch({ type: REQUEST_STATUS.REJECTED, error: error })
-      }
-    );
-  }, [userName]);
-
-  // -- PASSO 1 --
-  // if (error) {
-  //   return (
-  //     <div>
-  //       There was an error
-  //       <pre style={{ whiteSpace: 'normal' }}>{error}</pre>
-  //     </div>)
-  // }
-  // else if (!userName) {
-  //   return "Submit user"
-  // } else if (!user) {
-  //   return <UserFalback userName={userName} />
-  // } else {
-  //   return <UserView user={user} />
-  // }
-
-  // -- PASSO 2 --
   switch (status) {
     case REQUEST_STATUS.IDLE:
       return "Submit user"
